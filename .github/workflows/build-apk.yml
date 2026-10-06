@@ -1,0 +1,85 @@
+name: Build PHANAMODZ APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Find and extract project ZIP
+        shell: bash
+        run: |
+          set -e
+
+          ZIP_FILE=$(find . -maxdepth 2 -type f -name "*.zip" | head -n 1)
+
+          if [ -z "$ZIP_FILE" ]; then
+            echo "ไม่พบไฟล์ ZIP"
+            exit 1
+          fi
+
+          echo "ใช้ไฟล์: $ZIP_FILE"
+
+          mkdir -p android-project
+          unzip -o "$ZIP_FILE" -d android-project
+
+          echo "ค้นหา Gradle project..."
+          GRADLEW=$(find android-project -type f -name "gradlew" | head -n 1)
+
+          if [ -z "$GRADLEW" ]; then
+            echo "ไม่พบ gradlew ใน ZIP"
+            echo "ตรวจสอบโครงสร้างโปรเจกต์"
+            find android-project -maxdepth 4 -type f | head -100
+            exit 1
+          fi
+
+          PROJECT_DIR=$(dirname "$GRADLEW")
+
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Accept Android licenses
+        run: yes | sdkmanager --licenses || true
+
+      - name: Build APK
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Find APK
+        run: |
+          APK=$(find "${{ env.PROJECT_DIR }}" -type f -name "*.apk" | head -n 1)
+
+          if [ -z "$APK" ]; then
+            echo "ไม่พบ APK หลังจาก Build"
+            exit 1
+          fi
+
+          echo "พบ APK: $APK"
+
+          mkdir -p release
+          cp "$APK" release/PHANAMODZ_2.4.1.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: PHANAMODZ-2.4.1-APK
+          path: release/PHANAMODZ_2.4.1.apk
+          if-no-files-found: error
