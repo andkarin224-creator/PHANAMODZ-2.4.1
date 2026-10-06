@@ -28,28 +28,32 @@ jobs:
 
           echo "ใช้ไฟล์: $ZIP_FILE"
 
+          rm -rf android-project
           mkdir -p android-project
           unzip -o "$ZIP_FILE" -d android-project
 
-          echo "ค้นหา Gradle project..."
-          GRADLEW=$(find android-project -type f -name "gradlew" | head -n 1)
-
-          if [ -z "$GRADLEW" ]; then
-            echo "ไม่พบ gradlew ใน ZIP"
-            echo "ตรวจสอบโครงสร้างโปรเจกต์"
-            find android-project -maxdepth 4 -type f | head -100
+          if [ ! -f "android-project/settings.gradle" ]; then
+            echo "ไม่พบ settings.gradle"
             exit 1
           fi
 
-          PROJECT_DIR=$(dirname "$GRADLEW")
+          if [ ! -f "android-project/app/build.gradle" ]; then
+            echo "ไม่พบ app/build.gradle"
+            exit 1
+          fi
 
-          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "PROJECT_DIR=android-project" >> "$GITHUB_ENV"
 
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.7"
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
@@ -60,12 +64,12 @@ jobs:
       - name: Build APK
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          gradle assembleDebug --no-daemon --stacktrace
 
       - name: Find APK
         run: |
-          APK=$(find "${{ env.PROJECT_DIR }}" -type f -name "*.apk" | head -n 1)
+          APK=$(find "${{ env.PROJECT_DIR }}/app/build/outputs/apk" \
+            -type f -name "*.apk" | head -n 1)
 
           if [ -z "$APK" ]; then
             echo "ไม่พบ APK หลังจาก Build"
