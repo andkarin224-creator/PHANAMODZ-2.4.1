@@ -56,10 +56,16 @@ jobs:
           gradle-version: "8.7"
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        shell: bash
+        run: |
+          set -e
 
-      - name: Accept Android licenses
-        run: yes | sdkmanager --licenses || true
+          yes | sdkmanager --licenses >/dev/null || true
+
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
 
       - name: Build APK
         working-directory: ${{ env.PROJECT_DIR }}
